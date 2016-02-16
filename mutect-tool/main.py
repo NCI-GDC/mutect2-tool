@@ -54,19 +54,16 @@ def main():
 
     parser.add_argument('-n', '--normal_bam_path',
                         required = False,
-                        action="append",
                         help = 'normal bam path.',
     )
 
     parser.add_argument('-t', '--tumor_bam_path',
                         required = False,
-                        action="append",
                         help = 'tumor bam path',
     )
 
     parser.add_argument('-v', '--vcf_path',
                         required = False,
-                        action="append",
                         help = 'Individual VCF path',
     )
 
@@ -115,8 +112,8 @@ def main():
     logger.info('hostname=%s' % hostname)
 
 
-    normal_bam_path = pipe_util.get_param(args, 'normal_bam_path')[0]
-    tumor_bam_path = pipe_util.get_param(args, 'tumor_bam_path')[0]
+    normal_bam_path = pipe_util.get_param(args, 'normal_bam_path')
+    tumor_bam_path = pipe_util.get_param(args, 'tumor_bam_path')
     known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
     cosmic_path = pipe_util.get_param(args, 'cosmic_path')
     reference_fasta_path = pipe_util.get_param(args, 'reference_fasta_path')
