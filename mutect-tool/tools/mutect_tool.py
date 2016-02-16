@@ -44,7 +44,7 @@ def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, cosmic,
                          dbsnp, output_base, normal_panel, contEst,
                          normal_bam_path, tumor_bam_path):
 
-    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar ${GATK_PATH} -T MuTect2 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} --normal_panel ${PON} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2pon.vcf")
+    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar ${GATK_PATH} -T MuTect2 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} --normal_panel ${PON} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf")
 
     for i, block in enumerate(fai_chunk(fai_path, blocksize)):
 
@@ -63,7 +63,7 @@ def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, cosmic,
                                    OUTPUT_BASE = output_base
         )
 
-        yield cmd
+        yield cmd, "%s.%s.mt2.vcf" % (output_base, i)
 
 def run_mutect(uuid, normal_bam_path, tumor_bam_path, normal_panel,
               contEst, thread_count, reference_fasta_path,cosmic_path,
