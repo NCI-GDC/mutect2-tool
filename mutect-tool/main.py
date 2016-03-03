@@ -4,8 +4,8 @@ import argparse
 import logging
 import os
 import sys
-import sqlalchemy
 from cdis_pipe_utils import pipe_util
+from cdis_pipe_utils import postgres
 
 import tools.mutect_tool as mutect_tool
 
@@ -19,7 +19,7 @@ def is_nat(x):
     raise argparse.ArgumentTypeError('%s must be positive, non-zero' % x)
 
 def main():
-    parser = argparse.ArgumentParser('GATK MuTect2 Panel Of Normal creation')
+    parser = argparse.ArgumentParser('GATK MuTect2 Variant Calling Pipeline')
 
     # Logging flags.
     parser.add_argument('-d', '--debug',
@@ -42,12 +42,12 @@ def main():
                         help = 'Reference fasta fai path.',
     )
 
-    parser.add_argument('-snp', '--known_snp_vcf_path',
+    parser.add_argument('-dbsnp', '--known_snp_vcf_path',
                         required = False,
                         help='Reference SNP path.',
     )
 
-    parser.add_argument('-cos', '--cosmic_path',
+    parser.add_argument('-cosmic', '--cosmic_path',
                         required = False,
                         help='Reference COSMIC path.',
     )
@@ -60,11 +60,6 @@ def main():
     parser.add_argument('-t', '--tumor_bam_path',
                         required = False,
                         help = 'tumor bam path',
-    )
-
-    parser.add_argument('-v', '--vcf_path',
-                        required = False,
-                        help = 'Individual VCF path',
     )
 
     parser.add_argument('-j', '--thread_count',
@@ -80,62 +75,56 @@ def main():
                         help = 'Parallel Block Size',
     )
 
-    parser.add_argument('-u', '--uuid',
-                        required = True,
-                        help = 'analysis_id string',
-    )
-
-    parser.add_argument('--normal_panel',
-                        required = True,
-                        help = 'panel of normals vcf'
-    )
-
     parser.add_argument('--contEst',
                         required = True,
                         help = 'Contamination estimation value from ContEst'
     )
+    db = parser.add_argument_group("Database parameters")
+    db.add_argument("--host", default='pgreadwrite.osdc.io', help='hostname for db')
+    db.add_argument("--database", default='prod_bioinfo', help='name of the database')
+    db.add_argument("--postgres_config", default=None, help="postgres config file", required=True)
 
-    parser.add_argument('--case_id',
-                        required = True,
-                        help = 'case id for the tumor-normal pair'
-    )
+    optional = parser.add_argument_group("optional input parameters")
+    optional.add_argument("--normal_id", default="unknown", help="unique identifier for normal dataset")
+    optional.add_argument("--tumor_id", default="unknown", help="unique identifier for normal dataset")
+    optional.add_argument("--case_id", default="unknown", help="unique identifier")
+    optional.add_argument("--outdir", default="./", help="path for logs etc.")
 
     args = parser.parse_args()
-    uuid = args.uuid
+    case_id = args.case_id
+    normal_id = args.normal_id
+    tumor_id = args.tumor_id
     thread_count = str(args.thread_count)
-    Parallel_Block_Size = str(args.Parallel_Block_Size)
+    blocksize = str(args.Parallel_Block_Size)
+    contEst = str(args.contEst)
 
-    logger = pipe_util.setup_logging('gatk_mutect2', args, uuid)
-    engine = pipe_util.setup_db(uuid)
+    logger = pipe_util.setup_logging('gatk_mutect2', args, case_id)
 
     hostname = os.uname()[1]
     logger.info('hostname=%s' % hostname)
 
+    s = open(args.postgres_config, 'r').read()
+    postgres_config = eval(s)
+
+    DATABASE = {
+        'drivername': 'postgres',
+        'host' : args.host,
+        'port' : '5432',
+        'username': postgres_config['username'],
+        'password' : postgres_config['password'],
+        'database' : args.database
+    }
+
+
+    engine = postgres.db_connect(DATABASE)
 
     normal_bam_path = pipe_util.get_param(args, 'normal_bam_path')
     tumor_bam_path = pipe_util.get_param(args, 'tumor_bam_path')
+    reference_fasta_path = pipe_util.get_param(args, 'reference_fasta_path')
+    fai_path = pipe_util.get_param(args, 'reference_fasta_fai')
     known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
     cosmic_path = pipe_util.get_param(args, 'cosmic_path')
-    reference_fasta_path = pipe_util.get_param(args, 'reference_fasta_path')
-    thread_count = pipe_util.get_param(args, 'thread_count')
-    fai_path = pipe_util.get_param(args, 'reference_fasta_fai')
-    blocksize = pipe_util.get_param(args, 'Parallel_Block_Size')
-    normal_panel = pipe_util.get_param(args, 'normal_panel')
-    contEst = pipe_util.get_param(args, 'contEst')
-
-    mutect_tool.run_mutect(uuid,
-                       normal_bam_path,
-                       tumor_bam_path,
-                       normal_panel,
-                       contEst,
-                       thread_count,
-                       reference_fasta_path,
-                       cosmic_path,
-                       fai_path,
-                       blocksize,
-                       known_snp_vcf_path,
-                       engine,
-                       logger)
+    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, reference_fasta_path, contEst, cosmic_path, fai_path, blocksize, known_snp_vcf_path, engine, logger)
 
 
 if __name__ == '__main__':

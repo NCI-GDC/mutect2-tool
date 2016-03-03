@@ -6,14 +6,14 @@ setup(name = 'mutect2-tool',
       author = 'Shenglai Li',
       author_email = 'sli6@uchicago.edu',
       version = 0.1,
-      description = 'GATK MuTect2 Panel Of Normal tool',
-      #url = 'https://github.com/NCI-GDC/mutect-tool',
+      description = 'GATK MuTect2 Variant Calling tool',
+      url = 'https://github.com/NCI-GDC/mutect-tool',
       license = 'Apache 2.0',
       packages = find_packages(),
       install_requires = [
-          'psycopg2',
+          'pandas',
           'sqlalchemy',
-          'cdis_pipe_utils'
+          'psycopg2'
       ],
       classifiers = [
           'Development Status :: 3 - Alpha',
