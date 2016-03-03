@@ -95,7 +95,6 @@ def main():
     normal_id = args.normal_id
     tumor_id = args.tumor_id
     thread_count = str(args.thread_count)
-    blocksize = str(args.Parallel_Block_Size)
     contEst = str(args.contEst)
 
     logger = pipe_util.setup_logging('gatk_mutect2', args, case_id)
@@ -124,6 +123,7 @@ def main():
     fai_path = pipe_util.get_param(args, 'reference_fasta_fai')
     known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
     cosmic_path = pipe_util.get_param(args, 'cosmic_path')
+    blocksize = pipe_util.get_param(args, 'Parallel_Block_Size')
     mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, reference_fasta_path, contEst, cosmic_path, fai_path, blocksize, known_snp_vcf_path, engine, logger)
 
 
