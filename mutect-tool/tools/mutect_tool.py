@@ -18,7 +18,7 @@ def do_pool_commands(cmd, case_id, engine, logger, files, lock = Lock()):
     with lock:
         logger.info('contents of output=%s' % output_stdout.decode().format())
         cmd_list = cmd.split()
-        toolname = ('mutect2_variant_call: %s' % cmd_list[13])
+        toolname = ('mutect2_variant_call: %s' % cmd_list[16])
         metrics = time_util.parse_time(output_stdout)
         met = MuTect(case_id = case_id,
                     tool = toolname,
@@ -53,7 +53,7 @@ def fai_chunk(fai_path, blocksize):
 
 def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, cosmic, dbsnp, output_base, contEst, normal_bam_path, tumor_bam_path):
 
-    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar -Xmx2G ${GATK_PATH} -T MuTect2 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf")
+    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar -Xmx1G -XX:ParallelGCThreads=1 ${GATK_PATH} -T MuTect2 -nct 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf")
 
     for i, block in enumerate(fai_chunk(fai_path, blocksize)):
 
