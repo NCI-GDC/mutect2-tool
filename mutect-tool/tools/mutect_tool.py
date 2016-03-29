@@ -93,7 +93,7 @@ def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, th
                                    contEst = contEst,
                                    cosmic = cosmic_path,
                                    dbsnp = known_snp_vcf_path,
-                                   pon = pon,
+                                   pon = pon_path,
                                    output_base = os.path.join(step_dir, 'output'))
     )
     outputs = multi_commands(case_id, list(a[0] for a in cmds), thread_count, engine, files, logger)
