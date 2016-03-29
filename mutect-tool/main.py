@@ -52,6 +52,11 @@ def main():
                         help='Reference COSMIC path.',
     )
 
+    parser.add_argument('-pon', '--pon_path',
+                        required = False,
+                        help='Reference Panel Of Normal path.',
+    )
+
     parser.add_argument('-n', '--normal_bam_path',
                         required = False,
                         help = 'normal bam path.',
@@ -66,6 +71,11 @@ def main():
                         required = False,
                         type = is_nat,
                         help = 'Maximum number of threads for execution.',
+    )
+
+    parser.add_argument('-jh', '--java_heap',
+                        required = False,
+                        help = 'Maximum number of java heap memory.',
     )
 
     parser.add_argument('-bs', '--Parallel_Block_Size',
@@ -96,6 +106,7 @@ def main():
     tumor_id = args.tumor_id
     thread_count = str(args.thread_count)
     contEst = str(args.contEst)
+    java_heap = str(args.java_heap)
 
     logger = pipe_util.setup_logging('gatk_mutect2', args, case_id)
 
@@ -124,7 +135,8 @@ def main():
     known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
     cosmic_path = pipe_util.get_param(args, 'cosmic_path')
     blocksize = pipe_util.get_param(args, 'Parallel_Block_Size')
-    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, reference_fasta_path, contEst, cosmic_path, fai_path, blocksize, known_snp_vcf_path, engine, logger)
+    pon_path = pipe_util.get_param(args, 'pon_path')
+    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, java_heap, reference_fasta_path, contEst, cosmic_path, pon_path, fai_path, blocksize, known_snp_vcf_path, engine, logger)
 
 
 if __name__ == '__main__':
