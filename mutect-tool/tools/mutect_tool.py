@@ -52,30 +52,21 @@ def fai_chunk(fai_path, blocksize):
             yield (seq, i, min(i+blocksize-1, l))
 
 def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, cosmic, dbsnp, pon, output_base, contEst, normal_bam_path, tumor_bam_path):
-
     template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar -Xmx${JAVA_HEAP} -XX:ParallelGCThreads=1 ${GATK_PATH} -T MuTect2 -nct 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --cosmic ${COSMIC} --dbsnp ${DBSNP} --normal_panel ${PON} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf")
-
     for i, block in enumerate(fai_chunk(fai_path, blocksize)):
-
-        cmd = template.substitute(
-                              dict(
-                                   REF = ref,
-                                   REGION = '%s:%s-%s' % (block[0], block[1], block[2]),
-                                   BLOCK_NUM = i),
-                                   GATK_PATH = gatk_path,
-                                   JAVA_HEAP = java_heap,
-                                   NORMAL_BAM = normal_bam_path,
-                                   TUMOR_BAM = tumor_bam_path,
-                                   CONTAMINATION = contEst,
-                                   COSMIC = cosmic,
-                                   DBSNP = dbsnp,
-                                   PON = pon,
-                                   OUTPUT_BASE = output_base
-        )
-
+        cmd = template.substitute(dict(REF = ref, REGION = '%s:%s-%s' % (block[0], block[1], block[2]), BLOCK_NUM = i),
+                                       GATK_PATH = gatk_path,
+                                       JAVA_HEAP = java_heap,
+                                       NORMAL_BAM = normal_bam_path,
+                                       TUMOR_BAM = tumor_bam_path,
+                                       CONTAMINATION = contEst,
+                                       COSMIC = cosmic,
+                                       DBSNP = dbsnp,
+                                       PON = pon,
+                                       OUTPUT_BASE = output_base)
         yield cmd, "%s.%s.mt2.vcf" % (output_base, i)
 
-def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, reference_fasta_path, contEst, cosmic_path, fai_path, blocksize, java_heap, known_snp_vcf_path, pon, engine, logger):
+def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, java_heap, reference_fasta_path, contEst, cosmic_path, pon_path, fai_path, blocksize, known_snp_vcf_path, engine, logger):
   files = [normal_id, tumor_id]
   step_dir = os.path.join(os.getcwd(), 'mutect2')
   os.makedirs(step_dir, exist_ok=True)
