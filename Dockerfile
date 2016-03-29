@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --force-yes \
 USER ubuntu
 ENV HOME /home/ubuntu
 
-ENV mutect-tool 0.2c
+ENV mutect-tool 0.2d
 
 RUN mkdir -p ${HOME}/tools/mutect-tool
 ADD docker/GenomeAnalysisTK.jar ${HOME}/tools/
