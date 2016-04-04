@@ -18,7 +18,7 @@ def do_pool_commands(cmd, case_id, engine, logger, files, lock = Lock()):
     with lock:
         logger.info('contents of output=%s' % output_stdout.decode().format())
         cmd_list = cmd.split()
-        toolname = ('mutect2_variant_call: %s' % cmd_list[16])
+        toolname = ('mutect2_variant_call: %s' % cmd_list[18])
         metrics = time_util.parse_time(output_stdout)
         met = MuTect(case_id = case_id,
                     tool = toolname,
