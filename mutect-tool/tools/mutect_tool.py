@@ -52,7 +52,7 @@ def fai_chunk(fai_path, blocksize):
             yield (seq, i, min(i+blocksize-1, l))
 
 def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, pon, output_base, contEst, normal_bam_path, tumor_bam_path):
-    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar -Xmx${JAVA_HEAP} -XX:ParallelGCThreads=1 ${GATK_PATH} -T MuTect2 -nct 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --normal_panel ${PON} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf --output_mode EMIT_VARIANTS_ONLY --disable_auto_index_creation_and_locking_when_reading_rods")
+    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp -d64 -jar -Xmx${JAVA_HEAP} -XX:ParallelGCThreads=1 ${GATK_PATH} -T MuTect2 -nct 1 -nt 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --normal_panel ${PON} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf --output_mode EMIT_VARIANTS_ONLY --disable_auto_index_creation_and_locking_when_reading_rods")
     for i, block in enumerate(fai_chunk(fai_path, blocksize)):
         cmd = template.substitute(dict(REF = ref, REGION = '%s:%s-%s' % (block[0], block[1], block[2]), BLOCK_NUM = i),
                                        GATK_PATH = gatk_path,
