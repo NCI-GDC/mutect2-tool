@@ -42,6 +42,15 @@ def main():
                         help = 'Reference fasta fai path.',
     )
 
+    parser.add_argument('-dbsnp', '--known_snp_vcf_path',
+                        required = False,
+                        help='Reference SNP path.',
+    )
+
+    parser.add_argument('-cosmic', '--cosmic_path',
+                        required = False,
+                        help='Reference COSMIC path.',
+    )
     parser.add_argument('-pon', '--pon_path',
                         required = False,
                         help='Reference Panel Of Normal path.',
@@ -124,7 +133,9 @@ def main():
     fai_path = pipe_util.get_param(args, 'reference_fasta_fai')
     blocksize = pipe_util.get_param(args, 'Parallel_Block_Size')
     pon_path = pipe_util.get_param(args, 'pon_path')
-    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger)
+    known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
+    cosmic_path = pipe_util.get_param(args, 'cosmic_path')
+    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger)
 
 
 if __name__ == '__main__':
