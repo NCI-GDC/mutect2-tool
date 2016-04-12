@@ -89,7 +89,7 @@ def main():
                         help = 'Contamination estimation value from ContEst'
     )
     db = parser.add_argument_group("Database parameters")
-    db.add_argument("--host", default='pgreadwrite.osdc.io', help='hostname for db')
+    db.add_argument("--host", default='172.17.65.79', help='hostname for db')
     db.add_argument("--database", default='prod_bioinfo', help='name of the database')
     db.add_argument("--postgres_config", default=None, help="postgres config file", required=True)
 
