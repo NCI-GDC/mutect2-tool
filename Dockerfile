@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --force-yes \
 USER ubuntu
 ENV HOME /home/ubuntu
 
-ENV mutect-tool 0.5d
+ENV mutect-tool 0.8e
 
 RUN mkdir -p ${HOME}/tools/mutect-tool
 ADD docker/GenomeAnalysisTK.jar ${HOME}/tools/
@@ -17,8 +17,7 @@ ADD mutect-tool ${HOME}/tools/mutect-tool/
 ADD setup.* ${HOME}/tools/mutect-tool/
 ADD requirements.txt ${HOME}/tools/mutect-tool/
 
-RUN /bin/bash -c "source ${HOME}/.local/bin/virtualenvwrapper.sh \
-    && source ~/.virtualenvs/p3/bin/activate \
+RUN /bin/bash -c "source ~/.virtualenvs/p3/bin/activate \
     && cd ~/tools/mutect-tool \
     && pip install -r ./requirements.txt"
 
