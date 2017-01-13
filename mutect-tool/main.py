@@ -88,6 +88,10 @@ def main():
                         required = True,
                         help = 'Contamination estimation value from ContEst'
     )
+    parser.add_argument("--dontUseSoftClippedBases",
+                        help="If specified, it will not analyze soft clipped bases in the reads",
+                        action="store_true")
+
     db = parser.add_argument_group("Database parameters")
     db.add_argument("--host", default='172.17.65.79', help='hostname for db')
     db.add_argument("--database", default='prod_bioinfo', help='name of the database')
@@ -126,7 +130,7 @@ def main():
 
 
     engine = postgres.db_connect(DATABASE)
-
+    mode = pipe_util.get_param(args, 'dontUseSoftClippedBases')
     normal_bam_path = pipe_util.get_param(args, 'normal_bam_path')
     tumor_bam_path = pipe_util.get_param(args, 'tumor_bam_path')
     reference_fasta_path = pipe_util.get_param(args, 'reference_fasta_path')
@@ -135,7 +139,7 @@ def main():
     pon_path = pipe_util.get_param(args, 'pon_path')
     known_snp_vcf_path = pipe_util.get_param(args, 'known_snp_vcf_path')
     cosmic_path = pipe_util.get_param(args, 'cosmic_path')
-    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger)
+    mutect_tool.run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger, mode)
 
 
 if __name__ == '__main__':

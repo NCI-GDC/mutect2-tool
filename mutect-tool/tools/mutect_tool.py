@@ -18,7 +18,7 @@ def do_pool_commands(cmd, case_id, engine, logger, files, lock = Lock()):
     with lock:
         logger.info('contents of output=%s' % output_stdout.decode().format())
         cmd_list = cmd.split()
-        toolname = ('mutect2_variant_call: %s' % cmd_list[19])
+        toolname = ('mutect2_variant_call: %s' % cmd_list[18])
         metrics = time_util.parse_time(output_stdout)
         met = MuTect(case_id = case_id,
                     tool = toolname,
@@ -51,8 +51,11 @@ def fai_chunk(fai_path, blocksize):
         for i in range(1, l, blocksize):
             yield (seq, i, min(i+blocksize-1, l))
 
-def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, pon, cosmic, dbsnp, output_base, contEst, normal_bam_path, tumor_bam_path):
-    template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp_${BLOCK_NUM} -d64 -jar -Xmx${JAVA_HEAP} -XX:ParallelGCThreads=1 -XX:+UseSerialGC ${GATK_PATH} -T MuTect2 -nct 1 -nt 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --normal_panel ${PON} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf --output_mode EMIT_VARIANTS_ONLY --disable_auto_index_creation_and_locking_when_reading_rods")
+def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, pon, cosmic, dbsnp, output_base, contEst, normal_bam_path, tumor_bam_path, mode):
+    if not mode:
+        template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp_${BLOCK_NUM} -d64 -jar -Xmx${JAVA_HEAP} -XX:+UseSerialGC ${GATK_PATH} -T MuTect2 -nct 1 -nt 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --normal_panel ${PON} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf --output_mode EMIT_VARIANTS_ONLY --disable_auto_index_creation_and_locking_when_reading_rods")
+    else:
+        template = string.Template("/usr/bin/time -v java -Djava.io.tmpdir=/tmp/job_tmp_${BLOCK_NUM} -d64 -jar -Xmx${JAVA_HEAP} -XX:+UseSerialGC ${GATK_PATH} -T MuTect2 -nct 1 -nt 1 -R ${REF} -L ${REGION} -I:tumor ${TUMOR_BAM} -I:normal ${NORMAL_BAM} --normal_panel ${PON} --cosmic ${COSMIC} --dbsnp ${DBSNP} --contamination_fraction_to_filter ${CONTAMINATION} -o ${OUTPUT_BASE}.${BLOCK_NUM}.mt2.vcf --output_mode EMIT_VARIANTS_ONLY --disable_auto_index_creation_and_locking_when_reading_rods --dontUseSoftClippedBases")
     for i, block in enumerate(fai_chunk(fai_path, blocksize)):
         cmd = template.substitute(dict(REF = ref, REGION = '%s:%s-%s' % (block[0], block[1], block[2]), BLOCK_NUM = i),
                                        GATK_PATH = gatk_path,
@@ -66,7 +69,7 @@ def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, pon, co
                                        OUTPUT_BASE = output_base)
         yield cmd, "%s.%s.mt2.vcf" % (output_base, i)
 
-def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger):
+def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger, mode):
   files = [normal_id, tumor_id]
   step_dir = os.path.join(os.getcwd(), 'mutect2')
   os.makedirs(step_dir, exist_ok=True)
@@ -80,9 +83,10 @@ def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, kn
     logger.info('already completed step `MuTect2 Variant Calling` of: %s and %s' % (normal_bam_path, tumor_bam_path))
   else:
     logger.info('running step `MuTect2 Variant Calling` of: %s and %s' % (normal_bam_path, tumor_bam_path))
-    home_dir = os.path.expanduser('~')
-    gatk_path = os.path.join(home_dir, 'tools', 'GenomeAnalysisTK.jar')
+    #home_dir = os.path.expanduser('~')
+    gatk_path = os.path.join('/home/ubuntu', 'tools', 'GenomeAnalysisTK.jar')
     cmds = list(mutect2_cmd_template(
+                                   mode = mode,
                                    gatk_path = gatk_path,
                                    ref = reference_fasta_path,
                                    fai_path = fai_path,
