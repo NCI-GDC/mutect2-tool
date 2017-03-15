@@ -69,7 +69,7 @@ def mutect2_cmd_template(gatk_path, ref, fai_path, blocksize, java_heap, pon, co
                                        OUTPUT_BASE = output_base)
         yield cmd, "%s.%s.mt2.vcf" % (output_base, i)
 
-def run_mutect(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger, mode):
+def run_mutect2(case_id, normal_id, normal_bam_path, tumor_id, tumor_bam_path, known_snp_vcf_path, cosmic_path, thread_count, java_heap, reference_fasta_path, contEst, pon_path, fai_path, blocksize, engine, logger, mode):
   files = [normal_id, tumor_id]
   step_dir = os.path.join(os.getcwd(), 'mutect2')
   os.makedirs(step_dir, exist_ok=True)
