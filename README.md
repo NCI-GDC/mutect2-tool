@@ -1,15 +1,16 @@
-# GDC MuTect2 (GATK3.6, nightly-2016-02-25-gf39d340)
+GDC GATK3 MuTect2<br>
+GATK3.6, nightly-2016-02-25-gf39d340
+---
+The GATK3 MuTect2 pipeline employs a "Panel of Normals" to identify additional germline mutations. This panel is generated using TCGA blood normal genomes from thousands of individuals that were curated and confidently assessed to be cancer-free. This method allows for a higher level of confidence to be assigned to somatic variants that were called by the MuTect2 pipeline.
 
-The MuTect2 pipeline employs a "Panel of Normals" to identify additional germline mutations. This panel is generated using TCGA blood normal genomes from thousands of individuals that were curated and confidently assessed to be cancer-free. This method allows for a higher level of confidence to be assigned to somatic variants that were called by the MuTect2 pipeline.
-
-Original MuTect2: https://gatkforums.broadinstitute.org/gatk/discussion/9183/how-to-call-somatic-snvs-and-indels-using-mutect2
+Original GATK3 MuTect2: https://gatkforums.broadinstitute.org/gatk/discussion/9183/how-to-call-somatic-snvs-and-indels-using-mutect2
 
 ## GATK3
 
 Important note:
 
-* The GDC version was frozen to the version when we delivered our first data release. GATK team normally do not keep nightly version beyond 30 days, so that it makes really difficult to re-build the identical docker image.
-However, according to GATK team, it seems reasonable to use GATK3.7 as a replacement.
+* The GDC GATK MuTect2 version was frozen to the version when we delivered our first data release. GATK team normally do not keep nightly version beyond 30 days, so that it makes really difficult to re-build the identical docker image.<br>
+However, according to GATK team, it seems reasonable to use GATK3.7 as a replacement.<br>
 https://gatkforums.broadinstitute.org/gatk/discussion/9406/where-can-i-find-the-gdc-mutect2-version
 * Please contact GATK team for the GATK3.7 `GenomeAnalysisTK.jar`.
 
@@ -36,7 +37,7 @@ The docker images are tested under multiple environments. The most tested ones a
 
 There is a production-ready CWL example at https://github.com/NCI-GDC/mutect2-cwl which uses the docker images that are built from the `Dockerfile`s in this repo.
 
-To run multi-threading MuTect2:
+To run multi-threading GATK3 MuTect2:
 
 ```
 [INFO] [20200109 04:10:13] [multi_mutect2] - --------------------------------------------------------------------------------
