@@ -125,7 +125,7 @@ This format is automatically checked by a pre commit git hook.
 
 ## Code Review
 
-All branches should be pushed to [Github](https://github.com/NCI-GDC/mutect2-cwl) for code review.
+All branches should be pushed to [Github](https://github.com/NCI-GDC/mutect2-tool) for code review.
 
 Any branches containing significant work need to be reviewed and signed-off before they can be considered complete.
 
