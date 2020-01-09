@@ -1,6 +1,6 @@
-GDC GATK3 MuTect2<br>
-GATK3.6, nightly-2016-02-25-gf39d340
----
+# GDC GATK3 MuTect2
+![Version badge](https://img.shields.io/badge/GATK3.6-nightly--2016--02--25--gf39d340-<COLOR>.svg)
+
 The GATK3 MuTect2 pipeline employs a "Panel of Normals" to identify additional germline mutations. This panel is generated using TCGA blood normal genomes from thousands of individuals that were curated and confidently assessed to be cancer-free. This method allows for a higher level of confidence to be assigned to somatic variants that were called by the MuTect2 pipeline.
 
 Original GATK3 MuTect2: https://gatkforums.broadinstitute.org/gatk/discussion/9183/how-to-call-somatic-snvs-and-indels-using-mutect2
