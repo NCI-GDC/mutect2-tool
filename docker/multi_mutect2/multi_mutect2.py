@@ -7,12 +7,13 @@ Multithreading MuTect2
 import os
 import sys
 import time
+import glob
+import string
 import logging
 import argparse
 import subprocess
-import string
-from functools import partial
-from multiprocessing.dummy import Lock, Pool
+import threading
+from Queue import Queue
 
 
 def setup_logger():
@@ -29,7 +30,25 @@ def setup_logger():
     return logger
 
 
-def do_pool_commands(cmd, logger, shell_var=True, lock=Lock()):
+def get_file_size(filename):
+    ''' Gets file size '''
+    fstats = os.stat(filename)
+    return fstats.st_size
+
+
+def get_region(intervals):
+    """get region from intervals"""
+    interval_list = []
+    with open(intervals, "r") as fh:
+        line = fh.readlines()
+        for bed in line:
+            blocks = bed.rstrip().rsplit("\t")
+            intv = "{}:{}-{}".format(blocks[0], int(blocks[1]) + 1, blocks[2])
+            interval_list.append(intv)
+    return interval_list
+
+
+def run_command(cmd, logger, shell_var=True, lock=threading.Lock()):
     """run pool commands"""
     try:
         output = subprocess.Popen(
@@ -45,29 +64,8 @@ def do_pool_commands(cmd, logger, shell_var=True, lock=Lock()):
     return output.wait()
 
 
-def multi_commands(cmds, thread_count, logger, shell_var=True):
-    """run commands on number of threads"""
-    pool = Pool(int(thread_count))
-    output = pool.map(
-        partial(do_pool_commands, logger=logger, shell_var=shell_var), cmds
-    )
-    return output
-
-
-def get_region(intervals):
-    """get region from intervals"""
-    interval_list = []
-    with open(intervals, "r") as fh:
-        line = fh.readlines()
-        for bed in line:
-            blocks = bed.rstrip().rsplit("\t")
-            intv = "{}:{}-{}".format(blocks[0], int(blocks[1]) + 1, blocks[2])
-            interval_list.append(intv)
-    return interval_list
-
-
-def cmd_template(dct):
-    """cmd template"""
+def run_mutect2(kwargs, logger):
+    """mutect2 execution"""
     lst = [
         "java",
         "-Djava.io.tmpdir=/tmp/job_tmp_${BLOCK_NUM}",
@@ -104,26 +102,44 @@ def cmd_template(dct):
         "EMIT_VARIANTS_ONLY",
         "--disable_auto_index_creation_and_locking_when_reading_rods",
     ]
-    if dct["dontUseSoftClippedBases"]:
+    if kwargs["dontUseSoftClippedBases"]:
         lst = lst + ["--dontUseSoftClippedBases"]
     template = string.Template(" ".join(lst))
-    for i, interval in enumerate(get_region(dct["interval_bed_path"])):
-        cmd = template.substitute(
-            dict(
-                BLOCK_NUM=i,
-                JAVA_HEAP=dct["java_heap"],
-                GATK_PATH=dct["gatk_path"],
-                REF=dct["reference_path"],
-                REGION=interval,
-                TUMOR_BAM=dct["tumor_bam"],
-                NORMAL_BAM=dct["normal_bam"],
-                PON=dct["pon"],
-                COSMIC=dct["cosmic"],
-                DBSNP=dct["dbsnp"],
-                CONTAMINATION=dct["contest"],
-            )
+    cmd = template.substitute(
+        dict(
+            BLOCK_NUM=kwargs["chunk"],
+            JAVA_HEAP=kwargs["java_heap"],
+            GATK_PATH=kwargs["gatk_path"],
+            REF=kwargs["reference_path"],
+            REGION=kwargs["interval"],
+            TUMOR_BAM=kwargs["tumor_bam"],
+            NORMAL_BAM=kwargs["normal_bam"],
+            PON=kwargs["pon"],
+            COSMIC=kwargs["cosmic"],
+            DBSNP=kwargs["dbsnp"],
+            CONTAMINATION=kwargs["contest"],
         )
-        yield cmd, "{}.mt2.vcf".format(i)
+    )
+    ec = run_command(cmd, logger)
+    if ec != 0:
+        logger.error(
+            "Failed MuTect2 on #%s thread",
+            threading.current_thread().name
+        )
+
+
+class WorkerThread(threading.Thread):
+    '''custom worker thread class'''
+    def __init__(self, logger=None, group=None, target=None, name=None, args=(), kwargs=()):
+        threading.Thread.__init__(self, group=group, target=target, name=name)
+        self.args = args
+        self.kwargs = kwargs
+        self.logger = logger
+        self.queue = kwargs['queue']
+
+    def run(self):
+        run_mutect2(self.kwargs, self.logger)
+        self.queue.put(self)
 
 
 def get_args():
@@ -178,22 +194,38 @@ def get_args():
 def main(args, logger):
     """main"""
     logger.info("Running GATK3.6 MuTect2")
-    dct = vars(args)
-    dct["gatk_path"] = "/opt/GenomeAnalysisTK.jar"
-    mutect2_cmds = list(cmd_template(dct))
-    outputs = multi_commands([x[0] for x in mutect2_cmds], dct["thread_count"], logger)
-    if any(x != 0 for x in outputs):
-        logger.error("Failed multi_mutect2")
-    else:
-        logger.info("Completed multi_mutect2")
-        first = True
-        with open("multi_mutect2_merged.vcf", "w") as oh:
-            for _, out in mutect2_cmds:
-                with open(out) as fh:
-                    for line in fh:
-                        if first or not line.startswith("#"):
-                            oh.write(line)
-                first = False
+    kwargs = vars(args)
+    kwargs["gatk_path"] = "/opt/GenomeAnalysisTK.jar"
+
+    # Start Queue
+    queue = Queue(kwargs["thread_count"])
+    all_workers = list()
+    interval_list = get_region(kwargs["interval_bed_path"])
+    for i, interval in enumerate(interval_list):
+        kwargs["chunk"] = i
+        kwargs["interval"] = interval
+        kwargs["queue"] = queue
+        worker = WorkerThread(logger=logger, name="{}.mt2.vcf".format(i), kwargs=kwargs)
+        worker.start()
+        all_workers.append(worker)
+    for worker in all_workers:
+        worker.join()
+
+    # Check VCFs
+    result_vcfs = glob.glob("*.mt2.vcf")
+    assert len(result_vcfs) == len(interval_list), "Missing output!"
+    if any(get_file_size(x) == 0 for x in result_vcfs):
+        logger.error("Empty VCF detected!")
+
+    # Merge
+    first = True
+    with open("multi_mutect2_merged.vcf", "w") as oh:
+        for out in result_vcfs:
+            with open(out) as fh:
+                for line in fh:
+                    if first or not line.startswith("#"):
+                        oh.write(line)
+            first = False
 
 
 if __name__ == "__main__":
@@ -217,4 +249,3 @@ if __name__ == "__main__":
 
     # Done
     logger_.info("Finished, took %s seconds", round(time.time() - start, 2))
-
