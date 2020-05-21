@@ -6,7 +6,8 @@ LABEL description="GATK3 nightly-2016-02-25-gf39d340"
 RUN apt update -y \
     && apt install -y \
     openjdk-8-jre-headless \
-    software-properties-common
+    software-properties-common \
+    && apt-get clean
 
 RUN add-apt-repository ppa:deadsnakes/ppa \
     && apt update -y \
