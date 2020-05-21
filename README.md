@@ -42,7 +42,7 @@ To run multi-threading GATK3 MuTect2:
 
 ```
 [INFO] [20200109 04:10:13] [multi_mutect2] - --------------------------------------------------------------------------------
-[INFO] [20200109 04:10:13] [multi_mutect2] - multi_mutect2.py
+[INFO] [20200109 04:10:13] [multi_mutect2] - multi_mutect2_p3.py
 [INFO] [20200109 04:10:13] [multi_mutect2] - Program Args: docker/multi_mutect2/multi_mutect2.py -h
 [INFO] [20200109 04:10:13] [multi_mutect2] - --------------------------------------------------------------------------------
 usage: Internal multithreading MuTect2 calling. [-h] -j JAVA_HEAP -f
