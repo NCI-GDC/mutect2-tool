@@ -1,18 +1,21 @@
 """
 Multithreading MuTect2
-
 @author: Shenglai Li
 """
 
 import os
 import sys
 import time
+import glob
+import ctypes
+import string
 import logging
 import argparse
+import threading
 import subprocess
-import string
+from signal import SIGKILL
 from functools import partial
-from multiprocessing.dummy import Lock, Pool
+from concurrent.futures import ThreadPoolExecutor
 
 
 def setup_logger():
@@ -29,29 +32,52 @@ def setup_logger():
     return logger
 
 
-def do_pool_commands(cmd, logger, shell_var=True, lock=Lock()):
+def subprocess_commands_pipe(cmd, logger, shell_var=False, lock=threading.Lock()):
     """run pool commands"""
+    libc = ctypes.CDLL("libc.so.6")
+    pr_set_pdeathsig = ctypes.c_int(1)
+
+    def child_preexec_set_pdeathsig():
+        """
+        preexec_fn argument for subprocess.Popen,
+        it will send a SIGKILL to the child once the parent exits
+        """
+
+        def pcallable():
+            return libc.prctl(pr_set_pdeathsig, ctypes.c_ulong(SIGKILL))
+
+        return pcallable
+
     try:
         output = subprocess.Popen(
-            cmd, shell=shell_var, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            shlex.split(cmd),
+            shell=shell_var,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            preexec_fn=child_preexec_set_pdeathsig(),
         )
+        output.wait()
+        with lock:
+            logger.info("Running command: %s", cmd)
+    except BaseException as e:
+        output.kill()
+        with lock:
+            logger.error("command failed %s", cmd)
+            logger.exception(e)
+    finally:
         output_stdout, output_stderr = output.communicate()
         with lock:
-            logger.info("MuTect2 Args: %s", cmd)
-            logger.info(output_stdout)
-            logger.info(output_stderr)
-    except BaseException:
-        logger.error("command failed %s", cmd)
-    return output.wait()
+            logger.error(output_stdout.decode("UTF-8"))
+            logger.error(output_stderr.decode("UTF-8"))
 
-
-def multi_commands(cmds, thread_count, logger, shell_var=True):
+def tpe_submit_commands(cmds, thread_count, logger, shell_var=False):
     """run commands on number of threads"""
-    pool = Pool(int(thread_count))
-    output = pool.map(
-        partial(do_pool_commands, logger=logger, shell_var=shell_var), cmds
-    )
-    return output
+    with ThreadPoolExecutor(max_workers=thread_count) as e:
+        for cmd in cmds:
+            e.submit(
+                partial(subprocess_commands_pipe, logger=logger, shell_var=shell_var),
+                cmd,
+            )
 
 
 def get_region(intervals):
@@ -64,6 +90,12 @@ def get_region(intervals):
             intv = "{}:{}-{}".format(blocks[0], int(blocks[1]) + 1, blocks[2])
             interval_list.append(intv)
     return interval_list
+
+
+def get_file_size(filename):
+    """ Gets file size """
+    fstats = os.stat(filename)
+    return fstats.st_size
 
 
 def cmd_template(dct):
@@ -123,7 +155,7 @@ def cmd_template(dct):
                 CONTAMINATION=dct["contest"],
             )
         )
-        yield cmd, "{}.mt2.vcf".format(i)
+        yield cmd
 
 
 def get_args():
@@ -134,31 +166,59 @@ def get_args():
     parser = argparse.ArgumentParser("Internal multithreading MuTect2 calling.")
     # Required flags.
     parser.add_argument(
-        "-j", "--java_heap", required=True, help="Java heap memory."
+        "-j",
+        "--java_heap",
+        required=True,
+        help="Java heap memory."
     )
     parser.add_argument(
-        "-f", "--reference_path", required=True, help="Reference path."
+        "-f",
+        "--reference_path",
+        required=True,
+        help="Reference path."
     )
     parser.add_argument(
-        "-r", "--interval_bed_path", required=True, help="Interval bed file."
+        "-r",
+        "--interval_bed_path",
+        required=True,
+        help="Interval bed file."
     )
     parser.add_argument(
-        "-t", "--tumor_bam", required=True, help="Tumor bam file."
+        "-t",
+        "--tumor_bam",
+        required=True,
+        help="Tumor bam file."
     )
     parser.add_argument(
-        "-n", "--normal_bam", required=True, help="Normal bam file."
+        "-n",
+        "--normal_bam",
+        required=True,
+        help="Normal bam file."
     )
     parser.add_argument(
-        "-c", "--thread_count", type=int, required=True, help="Number of thread."
+        "-c",
+        "--thread_count",
+        type=int,
+        required=True,
+        help="Number of thread."
     )
     parser.add_argument(
-        "-p", "--pon", required=True, help="Panel of normals reference path."
+        "-p",
+        "--pon",
+        required=True,
+        help="Panel of normals reference path."
     )
     parser.add_argument(
-        "-s", "--cosmic", required=True, help="Cosmic reference path."
+        "-s",
+        "--cosmic",
+        required=True,
+        help="Cosmic reference path."
     )
     parser.add_argument(
-        "-d", "--dbsnp", required=True, help="dbSNP reference path."
+        "-d",
+        "--dbsnp",
+        required=True,
+        help="dbSNP reference path."
     )
     parser.add_argument(
         "-e",
@@ -178,22 +238,29 @@ def get_args():
 def main(args, logger):
     """main"""
     logger.info("Running GATK3.6 MuTect2")
-    dct = vars(args)
-    dct["gatk_path"] = "/opt/GenomeAnalysisTK.jar"
-    mutect2_cmds = list(cmd_template(dct))
-    outputs = multi_commands([x[0] for x in mutect2_cmds], dct["thread_count"], logger)
-    if any(x != 0 for x in outputs):
-        logger.error("Failed multi_mutect2")
-    else:
-        logger.info("Completed multi_mutect2")
-        first = True
-        with open("multi_mutect2_merged.vcf", "w") as oh:
-            for _, out in mutect2_cmds:
-                with open(out) as fh:
-                    for line in fh:
-                        if first or not line.startswith("#"):
-                            oh.write(line)
-                first = False
+    kwargs = vars(args)
+    kwargs["gatk_path"] = "/opt/GenomeAnalysisTK.jar"
+
+    # Start Queue
+    tpe_submit_commands(list(cmd_template(kwargs)), kwargs["thread_count"], logger)
+
+    # Check VCFs
+    result_vcfs = glob.glob("*.mt2.vcf")
+    assert len(result_vcfs) == len(
+        get_region(kwargs["interval_bed_path"])
+    ), "Missing output!"
+    if any(get_file_size(x) == 0 for x in result_vcfs):
+        logger.error("Empty VCF detected!")
+
+    # Merge
+    first = True
+    with open("multi_mutect2_merged.vcf", "w") as oh:
+        for out in result_vcfs:
+            with open(out) as fh:
+                for line in fh:
+                    if first or not line.startswith("#"):
+                        oh.write(line)
+            first = False
 
 
 if __name__ == "__main__":
@@ -217,4 +284,3 @@ if __name__ == "__main__":
 
     # Done
     logger_.info("Finished, took %s seconds", round(time.time() - start, 2))
-
