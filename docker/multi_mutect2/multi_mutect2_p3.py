@@ -68,8 +68,8 @@ def subprocess_commands_pipe(cmd, logger, shell_var=False, lock=threading.Lock()
     finally:
         output_stdout, output_stderr = output.communicate()
         with lock:
-            logger.error(output_stdout.decode("UTF-8"))
-            logger.error(output_stderr.decode("UTF-8"))
+            logger.info(output_stdout.decode("UTF-8"))
+            logger.info(output_stderr.decode("UTF-8"))
 
 def tpe_submit_commands(cmds, thread_count, logger, shell_var=False):
     """run commands on number of threads"""
