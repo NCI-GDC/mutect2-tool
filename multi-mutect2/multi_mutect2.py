@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Multithreading MuTect2
 @author: Shenglai Li
