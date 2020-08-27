@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Multithreading MuTect2
 @author: Shenglai Li
@@ -14,10 +15,49 @@ import logging
 import argparse
 import threading
 import subprocess
+from textwrap import dedent
 from signal import SIGKILL
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 
+CMD_STR = dedent(
+    """
+    java
+    -Djava.io.tmpdir=/tmp/job_tmp_{BLOCK_NUM}
+    -d64
+    -jar
+    -Xmx{JAVA_HEAP}
+    -XX:+UseSerialGC
+    {GATK_PATH}
+    -T
+    MuTect2
+    -nct
+    1
+    -nt
+    1
+    -R
+    {REF}
+    -L
+    {REGION}
+    -I:tumor
+    {TUMOR_BAM}
+    -I:normal
+    {NORMAL_BAM}
+    --normal_panel
+    {PON}
+    --cosmic
+    {COSMIC}
+    --dbsnp
+    {DBSNP}
+    --contamination_fraction_to_filter
+    {CONTAMINATION}
+    -o
+    {BLOCK_NUM}.mt2.vcf
+    --output_mode
+    EMIT_VARIANTS_ONLY
+    --disable_auto_index_creation_and_locking_when_reading_rods
+    """
+).strip()
 
 def setup_logger():
     """
@@ -285,3 +325,5 @@ if __name__ == "__main__":
 
     # Done
     logger_.info("Finished, took %s seconds", round(time.time() - start, 2))
+
+# __END__
