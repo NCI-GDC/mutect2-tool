@@ -13,8 +13,15 @@ COPY --from=gatk /usr/local/bin/ /usr/local/bin/
 COPY ./dist/ /opt 
 WORKDIR /opt
 
+RUN apt-get update \
+	&& apt-get install make \
+	&& rm -rf /var/lib/apt/lists/*
+
 RUN make init-pip \
   && ln -s /opt/bin/${BINARY} /usr/local/bin/${BINARY}
 
-ENTRYPOINT ["mutect2-tool"]
-CMD ["--help"]
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+ENTRYPOINT ["/tini", "--"]
+CMD ["mutect2_tool"]
