@@ -4,268 +4,182 @@ Multithreading MuTect2
 @author: Shenglai Li
 """
 
-import os
-import sys
-import time
-import glob
-import shlex
-import ctypes
-import string
-import logging
 import argparse
-import threading
+import concurrent.futures
+import logging
+import os
+import pathlib
+import shlex
 import subprocess
-from textwrap import dedent
-from signal import SIGKILL
-from functools import partial
+import sys
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+from textwrap import dedent
+from types import SimpleNamespace
+from typing import IO, Any, Callable, Generator, List, NamedTuple, Optional
+
+logger = logging.getLogger(__name__)
+
+DI = SimpleNamespace(subprocess=subprocess, futures=concurrent.futures,)
+
+
+class PopenReturn(NamedTuple):
+    stderr: str
+    stdout: str
+
 
 CMD_STR = dedent(
     """
     java
-    -Djava.io.tmpdir=/tmp/job_tmp_{BLOCK_NUM}
+    -Djava.io.tmpdir=/tmp/job_tmp_{region_num}
     -d64
     -jar
-    -Xmx{JAVA_HEAP}
+    -Xmx{java_heap}
     -XX:+UseSerialGC
-    {GATK_PATH}
-    -T
-    MuTect2
-    -nct
-    1
-    -nt
-    1
-    -R
-    {REF}
-    -L
-    {REGION}
-    -I:tumor
-    {TUMOR_BAM}
-    -I:normal
-    {NORMAL_BAM}
-    --normal_panel
-    {PON}
-    --cosmic
-    {COSMIC}
-    --dbsnp
-    {DBSNP}
-    --contamination_fraction_to_filter
-    {CONTAMINATION}
-    -o
-    {BLOCK_NUM}.mt2.vcf
+    {gatk_jar}
+    -T MuTect2
+    -nct 1
+    -nt 1
+    -R {reference_path}
+    -L {region}
+    -I:tumor {tumor_bam}
+    -I:normal {normal_bam}
+    --normal_panel {pon}
+    --cosmic {cosmic}
+    --dbsnp {dbsnp}
+    --contamination_fraction_to_filter {contamination}
+    -o {region_num}.mt2.vcf
     --output_mode
     EMIT_VARIANTS_ONLY
     --disable_auto_index_creation_and_locking_when_reading_rods
+    {clipped_bases}
     """
 ).strip()
+
 
 def setup_logger():
     """
     Sets up the logger.
     """
-    logger = logging.getLogger("multi_mutect2")
     logger_format = "[%(levelname)s] [%(asctime)s] [%(name)s] - %(message)s"
     logger.setLevel(level=logging.INFO)
     handler = logging.StreamHandler(sys.stderr)
     formatter = logging.Formatter(logger_format, datefmt="%Y%m%d %H:%M:%S")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    return logger
 
 
-def subprocess_commands_pipe(cmd, logger, shell_var=False, lock=threading.Lock()):
+def subprocess_commands_pipe(cmd: str, timeout: int = 3600, di=DI) -> PopenReturn:
     """run pool commands"""
-    libc = ctypes.CDLL("libc.so.6")
-    pr_set_pdeathsig = ctypes.c_int(1)
 
-    def child_preexec_set_pdeathsig():
-        """
-        preexec_fn argument for subprocess.Popen,
-        it will send a SIGKILL to the child once the parent exits
-        """
-
-        def pcallable():
-            return libc.prctl(pr_set_pdeathsig, ctypes.c_ulong(SIGKILL))
-
-        return pcallable
-
+    output = di.subprocess.Popen(
+        shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
     try:
-        output = subprocess.Popen(
-            shlex.split(cmd),
-            shell=shell_var,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            preexec_fn=child_preexec_set_pdeathsig(),
-        )
-        output.wait()
-        with lock:
-            logger.info("Running command: %s", cmd)
-    except BaseException as e:
+        output_stdout, output_stderr = output.communicate(timeout=timeout)
+    except Exception:
         output.kill()
-        with lock:
-            logger.error("command failed %s", cmd)
-            logger.exception(e)
-    finally:
-        output_stdout, output_stderr = output.communicate()
-        with lock:
-            logger.info(output_stdout.decode("UTF-8"))
-            logger.info(output_stderr.decode("UTF-8"))
+        _, output_stderr = output.communicate()
+        raise ValueError(output_stderr.decode())
 
-def tpe_submit_commands(cmds, thread_count, logger, shell_var=False):
-    """run commands on number of threads"""
-    with ThreadPoolExecutor(max_workers=thread_count) as e:
-        for cmd in cmds:
-            e.submit(
-                partial(subprocess_commands_pipe, logger=logger, shell_var=shell_var),
-                cmd,
-            )
+    return PopenReturn(stdout=output_stdout.decode(), stderr=output_stderr.decode(),)
 
 
-def get_region(intervals):
-    """get region from intervals"""
-    interval_list = []
-    with open(intervals, "r") as fh:
-        line = fh.readlines()
-        for bed in line:
-            blocks = bed.rstrip().rsplit("\t")
-            intv = "{}:{}-{}".format(blocks[0], int(blocks[1]) + 1, blocks[2])
-            interval_list.append(intv)
-    return interval_list
+def tpe_submit_commands(
+    cmds: List[Any], thread_count: int, fn: Callable = subprocess_commands_pipe, di=DI,
+):
+    """Run commands on multiple threads.
+
+    Stdout and stderr are logged on function success.
+    Exception logged on function failure.
+    Accepts:
+        cmds (List[str]): List of inputs to pass to each thread.
+        thread_count (int): Threads to run
+        fn (Callable): Function to run using threads, must accept each element of cmds
+    Returns:
+        None
+    Raises:
+        None
+    """
+    with di.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
+        futures = [executor.submit(fn, cmd) for cmd in cmds]
+        for future in di.futures.as_completed(futures):
+            try:
+                result = future.result()
+                logger.info(result.stdout.decode())
+                logger.info(result.stderr.decode())
+            except Exception as e:
+                logger.exception(e)
 
 
-def get_file_size(filename):
+def yield_bed_regions(intervals_file: str) -> Generator[str, None, None]:
+    """Yield region string from BED file."""
+    with open(intervals_file, "r") as fh:
+        for line in fh:
+            chrom, start, end, *_ = line.strip().split()
+            interval = "{}:{}-{}".format(chrom, int(start) + 1, end)
+            yield interval
+
+
+def get_file_size(filename: pathlib.Path) -> int:
     """ Gets file size """
-    fstats = os.stat(filename)
-    return fstats.st_size
+    return filename.stat().st_size
 
 
-def cmd_template(dct):
-    """cmd template"""
-    lst = [
-        "java",
-        "-Djava.io.tmpdir=/tmp/job_tmp_${BLOCK_NUM}",
-        "-d64",
-        "-jar",
-        "-Xmx${JAVA_HEAP}",
-        "-XX:+UseSerialGC",
-        "${GATK_PATH}",
-        "-T",
-        "MuTect2",
-        "-nct",
-        "1",
-        "-nt",
-        "1",
-        "-R",
-        "${REF}",
-        "-L",
-        "${REGION}",
-        "-I:tumor",
-        "${TUMOR_BAM}",
-        "-I:normal",
-        "${NORMAL_BAM}",
-        "--normal_panel",
-        "${PON}",
-        "--cosmic",
-        "${COSMIC}",
-        "--dbsnp",
-        "${DBSNP}",
-        "--contamination_fraction_to_filter",
-        "${CONTAMINATION}",
-        "-o",
-        "${BLOCK_NUM}.mt2.vcf",
-        "--output_mode",
-        "EMIT_VARIANTS_ONLY",
-        "--disable_auto_index_creation_and_locking_when_reading_rods",
-    ]
-    if dct["dontUseSoftClippedBases"]:
-        lst = lst + ["--dontUseSoftClippedBases"]
-    template = string.Template(" ".join(lst))
-    for i, interval in enumerate(get_region(dct["interval_bed_path"])):
-        cmd = template.substitute(
-            dict(
-                BLOCK_NUM=i,
-                JAVA_HEAP=dct["java_heap"],
-                GATK_PATH=dct["gatk_path"],
-                REF=dct["reference_path"],
-                REGION=interval,
-                TUMOR_BAM=dct["tumor_bam"],
-                NORMAL_BAM=dct["normal_bam"],
-                PON=dct["pon"],
-                COSMIC=dct["cosmic"],
-                DBSNP=dct["dbsnp"],
-                CONTAMINATION=dct["contest"],
-            )
+def yield_formatted_commands(
+    contest: str,
+    cosmic: str,
+    dbsnp: str,
+    gatk_jar: str,
+    interval_bed_path: str,
+    java_heap: int,
+    normal_bam: str,
+    not_clipped_bases: bool,
+    pon: str,
+    reference_path: str,
+    tumor_bam: str,
+) -> Generator[str, None, None]:
+    """Yield commands for each BED interval."""
+    clipped_bases = "--dontUseSoftClippedBases" if not_clipped_bases else ""
+    for i, region in enumerate(yield_bed_regions(interval_bed_path)):
+        cmd = CMD_STR.format(
+            region_num=i,
+            java_heap=java_heap,
+            gatk_jar=gatk_jar,
+            reference_path=reference_path,
+            region=region,
+            tumor_bam=tumor_bam,
+            normal_bam=normal_bam,
+            pon=pon,
+            cosmic=cosmic,
+            dbsnp=dbsnp,
+            contamination=contest,
+            clipped_bases=clipped_bases,
         )
         yield cmd
 
 
-def get_args():
+def setup_parser():
     """
     Loads the parser.
     """
     # Main parser
     parser = argparse.ArgumentParser("Internal multithreading MuTect2 calling.")
     # Required flags.
+    parser.add_argument("--java-heap", required=True, help="Java heap memory.")
+    parser.add_argument("--reference-path", required=True, help="Reference path.")
+    parser.add_argument("--interval-bed-path", required=True, help="Interval bed file.")
+    parser.add_argument("--tumor-bam", required=True, help="Tumor bam file.")
+    parser.add_argument("--normal-bam", required=True, help="Normal bam file.")
     parser.add_argument(
-        "-j",
-        "--java_heap",
-        required=True,
-        help="Java heap memory."
+        "--thread-count", type=int, required=True, help="Number of thread."
     )
+    parser.add_argument("--pon", required=True, help="Panel of normals reference path.")
+    parser.add_argument("--cosmic", required=True, help="Cosmic reference path.")
+    parser.add_argument("--dbsnp", required=True, help="dbSNP reference path.")
     parser.add_argument(
-        "-f",
-        "--reference_path",
-        required=True,
-        help="Reference path."
-    )
-    parser.add_argument(
-        "-r",
-        "--interval_bed_path",
-        required=True,
-        help="Interval bed file."
-    )
-    parser.add_argument(
-        "-t",
-        "--tumor_bam",
-        required=True,
-        help="Tumor bam file."
-    )
-    parser.add_argument(
-        "-n",
-        "--normal_bam",
-        required=True,
-        help="Normal bam file."
-    )
-    parser.add_argument(
-        "-c",
-        "--thread_count",
-        type=int,
-        required=True,
-        help="Number of thread."
-    )
-    parser.add_argument(
-        "-p",
-        "--pon",
-        required=True,
-        help="Panel of normals reference path."
-    )
-    parser.add_argument(
-        "-s",
-        "--cosmic",
-        required=True,
-        help="Cosmic reference path."
-    )
-    parser.add_argument(
-        "-d",
-        "--dbsnp",
-        required=True,
-        help="dbSNP reference path."
-    )
-    parser.add_argument(
-        "-e",
-        "--contest",
-        required=True,
-        help="Contamination estimation value from ContEst.",
+        "--contest", required=True, help="Contamination estimation value from ContEst.",
     )
     parser.add_argument(
         "-m",
@@ -273,57 +187,105 @@ def get_args():
         action="store_true",
         help="If specified, it will not analyze soft clipped bases in the reads.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--gatk-jar", default="/usr/local/bin/gatk.jar", required=False,
+    )
+    return parser
 
 
-def main(args, logger):
-    """main"""
-    logger.info("Running GATK3.6 MuTect2")
-    kwargs = vars(args)
-    kwargs["gatk_path"] = "/opt/GenomeAnalysisTK.jar"
+def process_argv(argv: Optional[List] = None) -> namedtuple:
+    """Processes argv into namedtuple."""
 
-    # Start Queue
-    tpe_submit_commands(list(cmd_template(kwargs)), kwargs["thread_count"], logger)
+    parser = setup_parser()
 
-    # Check VCFs
-    result_vcfs = glob.glob("*.mt2.vcf")
-    assert len(result_vcfs) == len(
-        get_region(kwargs["interval_bed_path"])
-    ), "Missing output!"
-    if any(get_file_size(x) == 0 for x in result_vcfs):
-        logger.error("Empty VCF detected!")
+    if argv:
+        args, unknown_args = parser.parse_known_args(argv)
+    else:
+        args, unknown_args = parser.parse_known_args()
 
+    args_dict = vars(args)
+    args_dict['extras'] = unknown_args
+    run_args = namedtuple('RunArgs', list(args_dict.keys()))
+    return run_args(**args_dict)
+
+
+def merge_files(mutect2_outputs: List[pathlib.Path], out_fh: IO):
+    """Write contents of outputs to given file handler."""
     # Merge
     first = True
-    with open("multi_mutect2_merged.vcf", "w") as oh:
-        for out in result_vcfs:
-            with open(out) as fh:
-                for line in fh:
-                    if first or not line.startswith("#"):
-                        oh.write(line)
-            first = False
+    for file in mutect2_outputs:
+        if get_file_size(file) == 0:
+            logger.error("Empty output: %s", file.name)
+            continue
+        with file.open() as fh:
+            for line in fh:
+                if first or not line.startswith("#"):
+                    out_fh.write(line)
+        first = False
+
+
+def run(run_args):
+    """Main script logic.
+    Creates muse commands for each BED region and executes in multiple threads.
+    """
+
+    run_commands = list(
+        yield_formatted_commands(
+            run_args.contest,
+            run_args.cosmic,
+            run_args.dbsnp,
+            run_args.gatk_jar,
+            run_args.interval_bed_path,
+            run_args.java_heap,
+            run_args.normal_bam,
+            run_args.not_clipped_bases,
+            run_args.pon,
+            run_args.reference_path,
+            run_args.tumor_bam,
+        )
+    )
+    # Start Queue
+    tpe_submit_commands(
+        run_commands, run_args.thread_count,
+    )
+
+    # Check and merge outputs
+    p = pathlib.Path('.')
+    outputs = list(p.glob("*.mt2.vcf"))
+
+    merged_output_path = "multi_mutect2_merged.vcf"
+    with open(merged_output_path, 'w') as fh:
+        merge_files(outputs, fh)
+
+    return
+
+
+def main(argv=None) -> int:
+    exit_code = 0
+
+    argv = argv or sys.argv
+    args = process_argv(argv)
+    setup_logger()
+
+    try:
+        run(args)
+    except Exception as e:
+        logger.exception(e)
+        exit_code = 1
+    return exit_code
 
 
 if __name__ == "__main__":
     # CLI Entrypoint.
-    start = time.time()
-    logger_ = setup_logger()
-    logger_.info("-" * 80)
-    logger_.info("multi_mutect2.py")
-    logger_.info("Program Args: %s", " ".join(sys.argv))
-    logger_.info("-" * 80)
+    retcode = 0
 
-    args_ = get_args()
+    try:
+        retcode = main()
+    except Exception as e:
+        retcode = 1
+        logger.exception(e)
 
-    # Process
-    logger_.info(
-        "Processing tumor and normal bam files %s, %s",
-        os.path.basename(args_.tumor_bam),
-        os.path.basename(args_.normal_bam),
-    )
-    main(args_, logger_)
+    sys.exit(retcode)
 
-    # Done
-    logger_.info("Finished, took %s seconds", round(time.time() - start, 2))
 
 # __END__
