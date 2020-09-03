@@ -1,6 +1,6 @@
 VERSION = 1.0.0
-REPO = python-project
-MODULE = python_project
+REPO = mutect2-tool
+MODULE = mutect2_tool
 BRANCH_NAME?=unknown
 
 GIT_SHORT_HASH:=$(shell git rev-parse --short HEAD)
