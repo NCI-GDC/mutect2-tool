@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -eo pipefail
+
+case "$1" in
+	test) python -m pytest tests;;
+	*version) python -m mutect2_tool --version;;
+	*) python -m mutect2_tool $@;;
+esac

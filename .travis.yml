@@ -1,0 +1,35 @@
+language: python
+python:
+- '3.7'
+services: docker
+git:
+  depth: false
+install: make build
+stages:
+- name: test
+- name: publish-release
+  if: branch = master AND type != pull_request
+- name: publish-staging
+  if: branch != master AND type != pull_request
+jobs:
+  include:
+  - stage: test
+    name: Test Docker
+    script:
+    - make version version-pypi
+    - make test-docker
+  - stage: publish-staging
+    name: Publish staging image
+    script:
+    - docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
+    - make publish-staging
+  - stage: publish-release
+    name: Publish production image
+    script:
+    - docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
+    - make publish-release
+env:
+  global:
+  - BRANCH_NAME=${TRAVIS_PULL_REQUEST_BRANCH:-$TRAVIS_BRANCH}
+  - secure: fcPoE+6OWPDUtkT8IncA5Wm1/99Sp+MLO5K0EPWEPscFl+MEQtDZEYk2MtJmfeUyx5u/ByV/Ur00PIlNssaRgGzYDOjPxV0JhSkq6HkkAehJFninCTIj7QhwEZKruzJipsiaPiIZrkdX3JScnkRxi8Z6czt26WTnf5wdyomjId3hrUv7mmpeFT7XUFhnbPMc1OscH5xuqoRYk/bCVCWImd7J8Rx7LFh11lT8wrgfzEHXk2xOq+mHZprgF5M+vfgqe4gmdpc3amDzIpN1K/ZFXrcqEA4KtrTYJ8Nc18iQUKBRKApvIVmXCV2ock8RhuZsopU4KIf3yIqPMAFas+PVfEQYUs3DTAKzzLpXLmOGgzd/DRPNsYs0XWXypK7PWCPfVsqYMS3HahNdiyKo1i3qKAiWrITQ1l1rx/E1+B7R9GDUNGYlAb5VF3tTA5ZeFcO2HybV5UbjRry4sCUg3KOrKhpJuWOOthtVIONX48snrEoznUV6JXuARLEg8Rqrfra0WGhoUPrEbK0USSckdlfwOb1s4BuIyBnb2/+Mj5f5BU60EZMpHsRlI6mLvOdJlVVUx4baF+vpmKEceEG7zfkC1FygFquF1D+3LJmfNkzEGNfU+myXg3mNObN+yPIXAIrKAwZtVnaGZwAfby+fKaNdN4XYiHNeJparchZ6e0cXeBQ=
+  - secure: Z39nbYMfoXZNvXzj7YslU001FyESj69jeuwz2W/INNzq2fp2IZhL234YZiLD89Q+ARBWM6MfzCVmV4gXmmw3KUAbgwmS47IAjLiwx3deyzzTrIeAytXUgHkUVybl7DkYN2+RG2pb2dQuMB0ELoHtEc/Lnsl+FGyZ0nwPD70FG+MskapD6gftt09MlI1EKVG4/6tArDXrHBEYmEgB7gjpbG2JS+yIcgwFdWg4ppZp8sm8VeG71BusAFG1KL9pFugUyn8f8bOoheMEycQGEJ6hlO+OZ3Dg1lJ5/1PpUVbGkTo5jWurKKw68efLT0HQgrSz0U86kAKWPwTnv8Rcd99+DvrkvepgJc7+IEBFgNchLqOWF5xXuOYVBw+9bk03MkR9CFEflZcuWjmuClT4Xlnm3vjmCZq3sYGm43NJA9qBIlGlJtP9SwDsNk04tjf5OUj8I7ClT2PgsIN0yCCd/3R9tdE+7TRFz+cbS4WUXgK3P+2GOcEP7n+8MSR3LnpvFlsoTjqmFkZMqM9dQEly8rQN3wetGpiH2MJTXwO7zPNx76lCzQqMRCr+uQQ2AxDyuhBZXAdf1PKlnx1uSyaI/dJy7GyAMFiHKIi860IOqhYwLWab8VOOxgJLZGrr67iGVsCJq435RLz+IFzgvcTieaozyb7mQ7UDj3DnAMZOZAlkxNI=
