@@ -1,5 +1,5 @@
 FROM quay.io/ncigdc/gatk:3.7 AS gatk
-FROM python:3.7-slim AS python
+FROM quay.io/ncigdc/python37 AS python
 FROM openjdk:slim
 
 ENV BINARY mutect2-tool
@@ -10,7 +10,7 @@ LABEL description="GATK3 nightly-2016-02-25-gf39d340"
 COPY --from=python / /
 COPY --from=gatk /usr/local/bin/ /usr/local/bin/
 
-COPY ./dist/ /opt 
+COPY ./dist/ /opt
 WORKDIR /opt
 
 RUN apt-get update \
