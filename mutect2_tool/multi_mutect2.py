@@ -107,8 +107,8 @@ def tpe_submit_commands(
         for future in di.futures.as_completed(futures):
             try:
                 result = future.result()
-                logger.info(result.stdout.decode())
-                logger.info(result.stderr.decode())
+                logger.info(result.stdout)
+                logger.info(result.stderr)
             except Exception as e:
                 logger.exception(e)
 
