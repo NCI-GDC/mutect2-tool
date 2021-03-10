@@ -183,7 +183,7 @@ def setup_parser():
     )
     parser.add_argument(
         "-m",
-        "--dontUseSoftClippedBases",
+        "--not_clipped_bases",
         action="store_true",
         help="If specified, it will not analyze soft clipped bases in the reads.",
     )
