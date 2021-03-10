@@ -14,15 +14,6 @@ However, according to GATK team, it seems reasonable to use GATK3.7 as a replace
 https://gatkforums.broadinstitute.org/gatk/discussion/9406/where-can-i-find-the-gdc-mutect2-version
 * Please contact GATK team for the GATK3.7 `GenomeAnalysisTK.jar`.
 
-## Docker
-
-There are two `Dockerfile`s for different purposes:
-
-* Vanilla MuTect2
-  * `/docker/Dockerfile` : `GATK3.6, nightly-2016-02-25-gf39d340` docker without additional features.
-* Multi-threading MuTect2
-  * `/docker/multi_mutect2/Dockerfile` : A python multi-threading implementation on MuTect2 function. Achieve `scatter/gather` method on Docker level.
-
 ## How to build
 
 https://docs.docker.com/engine/reference/builder/
