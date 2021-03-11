@@ -103,20 +103,21 @@ def tpe_submit_commands(
         thread_count (int): Threads to run
         fn (Callable): Function to run using threads, must accept each element of cmds
     Returns:
-        list of exceptions
+        list of commands which raised exceptions
     Raises:
         None
     """
     exceptions = []
     with di.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
-        futures = [executor.submit(fn, cmd) for cmd in cmds]
+        futures = {executor.submit(fn, cmd): cmd for cmd in cmds}
         for future in di.futures.as_completed(futures):
+            cmd = futures[future]
             try:
                 result = future.result()
                 logger.info(result.stdout)
                 logger.info(result.stderr)
             except Exception as e:
-                exceptions.append(e)
+                exceptions.append(cmd)
     return exceptions
 
 
@@ -253,10 +254,10 @@ def run(run_args):
         )
     )
     # Start Queue
-    exceptions = tpe_submit_commands(run_commands, run_args.thread_count,)
+    exceptions = tpe_submit_commands(run_commands, run_args.thread_count)
     if exceptions:
         for e in exceptions:
-            logger.exception(e)
+            logger.error(e)
         raise ValueError("Exceptions raised during processing.")
 
     # Check and merge outputs
