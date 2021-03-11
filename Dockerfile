@@ -1,6 +1,6 @@
 FROM quay.io/ncigdc/gatk:3.7 AS gatk
 FROM quay.io/ncigdc/python37 AS python
-FROM openjdk:8u282-slim
+FROM quay.io/ncigdc/bio-openjdk:8u282-slim
 
 ENV BINARY mutect2-tool
 LABEL maintainer="sli6@uchicago.edu"
