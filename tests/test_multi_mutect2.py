@@ -17,12 +17,13 @@ class ThisTestCase(unittest.TestCase):
             futures=mock.MagicMock(spec_set=MOD.concurrent.futures),
         )
 
-    def setup_popen(self, stdout=None, stderr=None):
+    def setup_popen(self, stdout=None, stderr=None, returncode=0):
         stdout = stdout or b''
         stderr = stderr or b''
         popen_instance = mock.create_autospec(subprocess.Popen, spec_set=True)
         self.mocks.subprocess.Popen.return_value = popen_instance
         popen_instance.communicate.return_value = (stdout, stderr)
+        type(popen_instance).returncode = mock.PropertyMock(return_value=returncode)
         return popen_instance
 
 
