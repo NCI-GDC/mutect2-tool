@@ -85,12 +85,15 @@ def subprocess_commands_pipe(cmd: str, timeout: int = 3600, di=DI) -> PopenRetur
         _, output_stderr = output.communicate()
         raise ValueError(output_stderr.decode())
 
-    return PopenReturn(stdout=output_stdout.decode(), stderr=output_stderr.decode(),)
+    if output.returncode != 0:
+        raise ValueError(output_stderr.decode())
+
+    return PopenReturn(stdout=output_stdout.decode(), stderr=output_stderr.decode())
 
 
 def tpe_submit_commands(
     cmds: List[Any], thread_count: int, fn: Callable = subprocess_commands_pipe, di=DI,
-):
+) -> list:
     """Run commands on multiple threads.
 
     Stdout and stderr are logged on function success.
@@ -100,10 +103,11 @@ def tpe_submit_commands(
         thread_count (int): Threads to run
         fn (Callable): Function to run using threads, must accept each element of cmds
     Returns:
-        None
+        list of exceptions
     Raises:
         None
     """
+    exceptions = []
     with di.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
         futures = [executor.submit(fn, cmd) for cmd in cmds]
         for future in di.futures.as_completed(futures):
@@ -112,7 +116,8 @@ def tpe_submit_commands(
                 logger.info(result.stdout)
                 logger.info(result.stderr)
             except Exception as e:
-                logger.exception(e)
+                exceptions.append(e)
+    return exceptions
 
 
 def yield_bed_regions(intervals_file: str) -> Generator[str, None, None]:
@@ -248,13 +253,19 @@ def run(run_args):
         )
     )
     # Start Queue
-    tpe_submit_commands(
-        run_commands, run_args.thread_count,
-    )
+    exceptions = tpe_submit_commands(run_commands, run_args.thread_count,)
+    if exceptions:
+        for e in exceptions:
+            logger.exception(e)
+        raise ValueError("Exceptions raised during processing.")
 
     # Check and merge outputs
     p = pathlib.Path('.')
     outputs = list(p.glob("*.mt2.vcf"))
+
+    # Sanity check
+    if len(run_commands) != len(outputs):
+        logger.error("Number of output files not expected")
 
     merged_output_path = "multi_mutect2_merged.vcf"
     with open(merged_output_path, 'w') as fh:
