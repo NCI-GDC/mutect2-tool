@@ -19,6 +19,8 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import IO, Any, Callable, Generator, List, NamedTuple, Optional
 
+from mutect2_tool import __version__
+
 logger = logging.getLogger(__name__)
 
 DI = SimpleNamespace(subprocess=subprocess, futures=concurrent.futures,)
@@ -166,6 +168,7 @@ def setup_parser():
     """
     # Main parser
     parser = argparse.ArgumentParser("Internal multithreading MuTect2 calling.")
+    parser.add_argument("--version", action="version", version=__version__)
     # Required flags.
     parser.add_argument("--java-heap", required=True, help="Java heap memory.")
     parser.add_argument("--reference-path", required=True, help="Reference path.")
