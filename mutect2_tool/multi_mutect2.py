@@ -118,6 +118,8 @@ def tpe_submit_commands(
                 logger.info(result.stderr)
             except Exception as e:
                 exceptions.append(cmd)
+                logger.error(result.stdout)
+                logger.error(result.stderr)
     return exceptions
 
 
