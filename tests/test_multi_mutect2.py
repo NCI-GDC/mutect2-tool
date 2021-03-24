@@ -37,7 +37,7 @@ class Test_subprocess_commands_pipe(ThisTestCase):
     def test_Popen_called_as_expected(self):
         mock_popen = self.setup_popen()
         cmd = MOD.CMD_STR
-        MOD.subprocess_commands_pipe(cmd, di=self.mocks)
+        MOD.subprocess_commands_pipe(cmd, timeout=3600, di=self.mocks)
         self.mocks.subprocess.Popen.assert_called_once_with(
             MOD.shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
@@ -51,7 +51,7 @@ class Test_subprocess_commands_pipe(ThisTestCase):
             (b'', b'Timeout expired'),
         ]
         with self.assertRaises(ValueError):
-            MOD.subprocess_commands_pipe(cmd, di=self.mocks)
+            MOD.subprocess_commands_pipe(cmd, timeout=3600, di=self.mocks)
         self.mocks.subprocess.Popen.assert_called_once_with(
             MOD.shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
@@ -78,13 +78,18 @@ class Test_ThreadPoolExecutor(ThisTestCase):
         self.mocks.futures.ThreadPoolExecutor.return_value.__enter__.return_value = (
             tpe_mock
         )
+        timeout = 3600
         commands = ['foo bar']
         mock_fn = mock.Mock()
         max_workers = 2
         MOD.tpe_submit_commands(
-            commands, thread_count=max_workers, fn=mock_fn, di=self.mocks
+            commands,
+            thread_count=max_workers,
+            timeout=timeout,
+            fn=mock_fn,
+            di=self.mocks,
         )
-        expected_calls = [mock.call(mock_fn, cmd) for cmd in commands]
+        expected_calls = [mock.call(mock_fn, cmd, timeout) for cmd in commands]
         tpe_mock.submit.assert_has_calls(expected_calls)
         self.mocks.futures.ThreadPoolExecutor.assert_called_once_with(
             max_workers=max_workers
