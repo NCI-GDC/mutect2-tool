@@ -1,0 +1,20 @@
+{
+    "template": "git@github.com:NCI-GDC/bio-python-template.git",
+    "commit": "0b6345a590be88d3cb69c007749a0e9e415ab56f",
+    "context": {
+      "cookiecutter": {
+        "full_name": "Linghao Song",
+        "email": "sxwcasd@gmail.com",
+        "github_username": "sxwcasd",
+        "project_name": "mutect2-tool",
+        "package_name": "mutect2_tool",
+        "project_short_description": "The GATK3 MuTect2 pipeline employs a "Panel of Normals" to identify additional germline mutations. This panel is generated using TCGA blood normal genomes from thousands of individuals that were curated and confidently assessed to be cancer-free. This method allows for a higher level of confidence to be assigned to somatic variants that were called by the MuTect2 pipeline.",
+        "min_python_version": "3.9",
+        "github_repo": "https://github.com/NCI-GDC/mutect2-tool",
+        "commit": "0b6345a590be88d3cb69c007749a0e9e415ab56f",
+        "_template": "git@github.com:NCI-GDC/bio-python-template.git"
+      }
+    },
+    "directory": null,
+    "checkout": null
+  }
